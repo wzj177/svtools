@@ -70,12 +70,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { NCard, NGrid, NGridItem, NIcon, NModal, NAlert, NCheckbox, NButton } from 'naive-ui'
 import { DocumentTextOutline, CutOutline, ShieldCheckmarkOutline, DownloadOutline } from '@vicons/ionicons5'
 import { useRouter } from 'vue-router'
+import { useAppStore } from '@/stores/app'
 
 const router = useRouter()
+const appStore = useAppStore()
 const isComplianceModalVisible = ref(false)
 const agreeTerms = ref(false)
 
@@ -110,24 +112,41 @@ const features = [
   }
 ]
 
-const checkCompliance = () => {
-  const accepted = localStorage.getItem('compliance_accepted')
-  if (!accepted) {
+const checkCompliance = async () => {
+  // 先检查本地缓存
+  const localAccepted = appStore.checkComplianceLocal()
+  if (!localAccepted) {
     isComplianceModalVisible.value = true
+    return
+  }
+  
+  // 再检查后端状态（如果可用）
+  try {
+    const backendAccepted = await appStore.checkComplianceFromBackend()
+    if (!backendAccepted) {
+      isComplianceModalVisible.value = true
+    }
+  } catch (error) {
+    // 后端不可用时，使用本地状态
+    console.log('Backend not available, using local state')
   }
 }
 
-const acceptCompliance = () => {
-  localStorage.setItem('compliance_accepted', 'true')
+const acceptCompliance = async () => {
+  await appStore.acceptCompliance()
   isComplianceModalVisible.value = false
 }
 
-const navigateTo = (path: string) => {
-  checkCompliance()
-  router.push(path)
+const navigateTo = async (path: string) => {
+  await checkCompliance()
+  if (!isComplianceModalVisible.value) {
+    router.push(path)
+  }
 }
 
-checkCompliance()
+onMounted(() => {
+  checkCompliance()
+})
 </script>
 
 <style scoped>
